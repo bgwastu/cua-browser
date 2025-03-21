@@ -267,17 +267,14 @@ export default function LegacyChatFeed({
 
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
-
     if (uiState.sessionId) {
       // Reset timer when a new session starts
       setSessionTime(0);
-
       // Start the timer
       timer = setInterval(() => {
         setSessionTime((prevTime) => prevTime + 1);
       }, 1000);
     }
-
     return () => {
       if (timer) clearInterval(timer);
     };

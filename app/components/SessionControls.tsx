@@ -8,13 +8,10 @@ interface SessionControlsProps {
   onStop: () => void;
 }
 
-const formatTime = (seconds: number, totalTime: string): string => {
-  // Always show minutes:seconds format
+const formatTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds
-    .toString()
-    .padStart(2, "0")} / ${totalTime}`;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 };
 
 export const SessionControls: React.FC<SessionControlsProps> = ({
@@ -45,7 +42,7 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
         <div className="flex items-center px-1 py-1 text-sm text-[#2E191E]">
           <span className="font-medium">Session time:</span>{" "}
           <span className="ml-1 min-w-[80px] text-center">
-            {mounted ? formatTime(sessionTime, "5:00") : "0:00"}
+            {mounted ? formatTime(sessionTime) : "0:00"}
           </span>
         </div>
       </div>

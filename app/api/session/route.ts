@@ -97,7 +97,6 @@ async function createSession(timezone?: string) {
     browserSettings,
     keepAlive: true,
     region: getClosestRegion(timezone),
-    timeout: 600,
   });
   return {
     session
