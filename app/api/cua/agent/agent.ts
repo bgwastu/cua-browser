@@ -11,9 +11,6 @@ import {
   Tool,
   RequestOptions,
 } from "./types";
-import { AxiosError } from "axios";
-import axios from "axios";
-import axiosRetry from 'axios-retry';
 
 type AcknowledgeSafetyCheckCallback = (message: string) => boolean;
 
@@ -116,24 +113,50 @@ export class Agent {
       headers['Openai-Organization'] = openaiOrg;
     }
 
-    // Configure retry behavior
-    axiosRetry(axios, { 
-      retries: 3,
-      retryDelay: axiosRetry.exponentialDelay,
-      retryCondition: (error: AxiosError): boolean => {
-        return axiosRetry.isNetworkOrIdempotentRequestError(error) || 
-               (error.response?.status ? error.response.status >= 500 : false);
+    // Function to handle fetch with retry logic
+    const fetchWithRetry = async (
+      url: string,
+      options: RequestInit,
+      retries = 3,
+      backoff = 300
+    ): Promise<any> => {
+      try {
+        const response = await fetch(url, options);
+        
+        // If response is not ok and we have retries left
+        if (!response.ok) {
+          if (response.status >= 500 && retries > 0) {
+            // Wait for backoff duration and then retry
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            return fetchWithRetry(url, options, retries - 1, backoff * 2);
+          }
+          
+          // If retries exhausted or status code is not 5xx, throw error with response details
+          const errorData = await response.json().catch(() => ({ message: "Failed to parse error response" }));
+          throw new Error(`Request failed with status ${response.status}: ${JSON.stringify(errorData)}`);
+        }
+        
+        return response.json();
+      } catch (error) {
+        if (retries > 0) {
+          // Wait for backoff duration and then retry
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          return fetchWithRetry(url, options, retries - 1, backoff * 2);
+        }
+        throw error;
       }
-    });
+    };
   
     try {
-      const response = await axios.post(url, options, { headers });
-      return response.data;
+      const response = await fetchWithRetry(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(options)
+      });
+      
+      return response;
     } catch (error) {
-      const axiosError = error as AxiosError;
-
-      console.error(`Error: ${axiosError.response?.status} ${axiosError.response?.data || axiosError.message}`);
-      console.error(`${JSON.stringify(axiosError.response?.data)}`);
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   } 

@@ -3,7 +3,6 @@ import { Browser, Page, chromium } from "playwright";
 import { BasePlaywrightComputer } from "./base_playwright";
 import Browserbase from "@browserbasehq/sdk";
 import { SessionCreateResponse } from "@browserbasehq/sdk/resources/sessions/sessions.mjs";
-import axios from "axios";
 
 dotenv.config();
 
@@ -76,17 +75,23 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
      * @returns A tuple containing the connected browser and page objects.
      */
     if (this.sessionId) {
-      // TODO: replace with this when we ship connectUrl via session GET to the SDK
-      const response = await axios.get(
+      // Use fetch instead of axios to get session data
+      const response = await fetch(
         `https://api.browserbase.com/v1/sessions/${this.sessionId}`,
         {
           headers: {
-            "X-BB-API-Key": process.env.BROWSERBASE_API_KEY,
+            "X-BB-API-Key": process.env.BROWSERBASE_API_KEY!,
           },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to retrieve session: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
       this.session = {
-        connectUrl: response.data.connectUrl,
+        connectUrl: data.connectUrl,
       } as unknown as BrowserbaseSession;
     } else {
       // Create a new session on Browserbase with specified parameters
