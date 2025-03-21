@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const { sessionId, responseId, input } = body;
     console.log("input", input);
 
-    computer = new BrowserbaseBrowser(1024, 768, "us-west-2", false, sessionId);
+    computer = new BrowserbaseBrowser(1024, 768, "ap-southeast-1", false, sessionId);
     agent = new Agent("computer-use-preview", computer);
     if (!sessionId) {
       return NextResponse.json(

@@ -43,7 +43,7 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
   constructor(
     width: number = 1024,
     height: number = 768,
-    region: string = "us-west-2",
+    region: string = "ap-southeast-1",
     proxy: boolean = false,
     sessionId: string | null = null
   ) {
@@ -52,7 +52,7 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
      *
      * @param width - The width of the browser viewport. Default is 1024.
      * @param height - The height of the browser viewport. Default is 768.
-     * @param region - The region for the Browserbase session. Default is "us-west-2". Pick a region close to you for better performance. https://docs.browserbase.com/guides/multi-region
+     * @param region - The region for the Browserbase session. Default is "ap-southeast-1". Pick a region close to you for better performance. https://docs.browserbase.com/guides/multi-region
      * @param proxy - Whether to use a proxy for the session. Default is False. Turn on proxies if you're browsing is frequently interrupted. https://docs.browserbase.com/features/proxies
      * @param sessionId - Optional. If provided, use an existing session instead of creating a new one.
      */
