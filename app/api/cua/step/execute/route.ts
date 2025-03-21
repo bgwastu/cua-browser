@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { Agent } from '../../agent/agent';
+import { createAgent, AgentDependencies, takeAction } from '../../agent/agent';
 import { BrowserbaseBrowser } from '../../agent/browserbase';
 
 export async function POST(request: Request) {
   let computer: BrowserbaseBrowser | null = null;
-  let agent: Agent | null = null;
+  let dependencies: AgentDependencies;
 
   try {
     const body = await request.json();
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     console.log("output", output);
 
     computer = new BrowserbaseBrowser(1024, 768, "us-west-2", false, sessionId);
-    agent = new Agent("computer-use-preview", computer);
+    dependencies = createAgent("computer-use-preview", computer);
     if (!sessionId) {
       return NextResponse.json(
         { error: 'Missing sessionId in request body' },
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     await computer.connect();
 
-    const result = await agent.takeAction(output.output);
+    const result = await takeAction(dependencies, output.output);
 
     return NextResponse.json(result);
   } catch (error) {
