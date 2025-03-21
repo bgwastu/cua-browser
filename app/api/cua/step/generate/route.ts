@@ -1,11 +1,11 @@
-  import { NextResponse } from "next/server";
-import { createAgent, AgentDependencies, getAction, takeAction } from "../../agent/agent";
+import { NextResponse } from "next/server";
+import { Agent } from "../../agent/agent";
 import { BrowserbaseBrowser } from "../../agent/browserbase";
 import { ComputerToolCall } from "../../agent/types";
 
 export async function POST(request: Request) {
   let computer: BrowserbaseBrowser | null = null;
-  let dependencies: AgentDependencies;
+  let agent: Agent | null = null;
 
   try {
     const body = await request.json();
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     console.log("input", input);
 
     computer = new BrowserbaseBrowser(1024, 768, "us-west-2", false, sessionId);
-    dependencies = createAgent("computer-use-preview", computer);
+    agent = new Agent("computer-use-preview", computer);
     if (!sessionId) {
       return NextResponse.json(
         { error: "Missing sessionId in request body" },
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let result = await getAction(dependencies, input, responseId);
+    let result = await agent.getAction(input, responseId);
 
     // If there's a screenshot returned, just handle it right here so we don't have to make a round trip.
     if (result.output.find((item) => item.type === "computer_call")) {
@@ -31,8 +31,8 @@ export async function POST(request: Request) {
       if (computerCall.action.type === "screenshot") {
         await computer.connect();
 
-        const screenshotAction = await takeAction(dependencies, result.output);
-        result = await getAction(dependencies,
+        const screenshotAction = await agent.takeAction(result.output);
+        result = await agent.getAction(
           screenshotAction.filter((item) => item.type != "message"),
           result.responseId
         );
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       result.output.find((item) => item.type === "reasoning")
     ) {
       do {
-        result = await getAction(dependencies,
+        result = await agent.getAction(
           [
             {
             role: "user",

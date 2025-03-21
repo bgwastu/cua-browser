@@ -14,262 +14,266 @@ import {
 
 type AcknowledgeSafetyCheckCallback = (message: string) => boolean;
 
-export type AgentDependencies = {
-  client: any;
-  model: string;
-  computer: BrowserbaseBrowser;
-  tools: Tool[];
-  printSteps: boolean;
-  acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback;
-  lastResponseId?: string;
-};
+export class Agent {
+  private client: any;
+  private model: string;
+  private computer: BrowserbaseBrowser;
+  private tools: Tool[];
+  private printSteps: boolean = true;
+  private acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback;
+  public lastResponseId: string | undefined = undefined;
 
-export function createAgent(
-  model: string = "computer-use-preview",
-  computer: BrowserbaseBrowser,
-  acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback = () => true,
-  printSteps: boolean = true
-): Omit<AgentDependencies, "lastResponseId"> {
-  const client = createOpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    organization: process.env.OPENAI_ORG,
-  });
+  constructor(
+    model: string = "computer-use-preview",
+    computer: BrowserbaseBrowser,
+    acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback = () => true
+  ) {
+    this.client = createOpenAI({ apiKey: process.env.OPENAI_API_KEY, organization: process.env.OPENAI_ORG });
+    this.model = model;
+    this.computer = computer;
+    this.acknowledgeSafetyCheckCallback = acknowledgeSafetyCheckCallback;
 
-  const tools: Tool[] = [
-    {
-      type: "computer-preview",
-      display_width: computer.dimensions[0],
-      display_height: computer.dimensions[1],
-      environment: computer.environment,
-    },
-    {
-      type: "function",
-      name: "back",
-      description: "Go back to the previous page.",
-      parameters: {},
-      strict: false,
-    },
-    {
-      type: "function",
-      name: "goto",
-      description: "Go to a specific URL.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: {
-            type: "string",
-            description: "Fully qualified URL to navigate to.",
-          },
-        },
-        additionalProperties: false,
-        required: ["url"],
+    this.tools = [
+      {
+        type: "computer-preview",
+        display_width: computer.dimensions[0],
+        display_height: computer.dimensions[1],
+        environment: computer.environment,
       },
-      strict: false,
-    },
-  ];
-
-  return {
-    client,
-    model,
-    computer,
-    tools,
-    printSteps,
-    acknowledgeSafetyCheckCallback,
-  };
-}
-
-export async function createResponse(
-  options: RequestOptions,
-  client: any
-): Promise<any> {
-  const url = "https://api.openai.com/v1/responses";
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    "Content-Type": "application/json",
-    "Openai-beta": "responses=v1",
-  };
-
-  const openaiOrg = process.env.OPENAI_ORG;
-  if (openaiOrg) {
-    headers["Openai-Organization"] = openaiOrg;
+      {
+        type: "function",
+        name: "back",
+        description: "Go back to the previous page.",
+        parameters: {},
+        strict: false,
+      },
+      {
+        type: "function",
+        name: "goto",
+        description: "Go to a specific URL.",
+        parameters: {
+          type: "object",
+          properties: {
+            url: {
+              type: "string",
+              description: "Fully qualified URL to navigate to.",
+            },
+          },
+          additionalProperties: false,
+          required: ["url"],
+        },
+        strict: false,
+      },
+    ];
+    /* Some additional tools, disabled as they seem to slow down model performance
+      {
+        type: "function",
+        name: "refresh",
+        description: "Refresh the current page.",
+        parameters: {},
+        strict: false,
+      },
+      {
+        type: "function",
+        name: "listTabs",
+        description: "Get the list of tabs, including the current tab.",
+        parameters: {},
+        strict: false,
+      },
+      {
+        type: "function",
+        name: "changeTab",
+        description: "Change to a specific tab.",
+        parameters: {
+          type: "object",
+          properties: {
+            tab: {
+              type: "string",
+              description: "The URL of the tab to change to.",
+            },
+          },
+          additionalProperties: false,
+          required: ["tab"],
+        },
+        strict: false,
+      },
+      */
   }
 
-  // Manual retry logic
-  let retries = 3;
-  let response;
-  while (retries > 0) {
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(options),
-      });
+  private async createResponse(options: RequestOptions): Promise<any> {
+    const url = "https://api.openai.com/v1/responses";
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Openai-beta': 'responses=v1',
+    };
 
-      if (response.ok) {
-        return await response.json();
-      }
-
-      if (response.status < 500) {
-        const errorData = await response.json();
-        console.error(
-          `Error: ${response.status} ${JSON.stringify(errorData)}`
-        );
-        throw new Error(`Request failed with status ${response.status}`);
-      }
-    } catch (error) {
-      console.error(`Fetch error: ${error}`);
-      if (retries === 1) {
-        throw error; // Re-throw the error on the last retry
-      }
+    const openaiOrg = process.env.OPENAI_ORG;
+    if (openaiOrg) {
+      headers['Openai-Organization'] = openaiOrg;
     }
 
-    // Exponential backoff (simplified)
-    await new Promise((resolve) => setTimeout(resolve, 1000 * (4 - retries)));
-    retries--;
-  }
-  if (response) {
-    const errorData = await response.json();
-    console.error(`Error: ${response.status} ${JSON.stringify(errorData)}`);
-  }
-  throw new Error("Max retries exceeded");
-}
+    // Manual retry logic
+    let retries = 3;
+    let response;
+    while (retries > 0) {
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(options),
+        });
 
-export async function getAction(
-  dependencies: AgentDependencies,
-  inputItems: InputItem[],
-  previousResponseId: string | undefined = dependencies.lastResponseId
-): Promise<{
-  output: Item[];
-  responseId: string;
-}> {
-  dependencies.lastResponseId = previousResponseId;
-  const response = await createResponse(
-    {
-      model: dependencies.model,
+        if (response.ok) {
+          return await response.json();
+        }
+
+        if (response.status < 500) {
+          const errorData = await response.json();
+          console.error(`Error: ${response.status} ${JSON.stringify(errorData)}`);
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+      } catch (error) {
+        console.error(`Fetch error: ${error}`);
+        if (retries === 1) {
+          throw error; // Re-throw the error on the last retry
+        }
+      }
+
+      // Exponential backoff (simplified)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (4 - retries)));
+      retries--;
+    }
+    if (response) {
+      const errorData = await response.json();
+      console.error(`Error: ${response.status} ${JSON.stringify(errorData)}`);
+    }
+    throw new Error("Max retries exceeded");
+  }
+
+  async getAction(
+    inputItems: InputItem[],
+    previousResponseId: string | undefined
+  ): Promise<{
+    output: Item[];
+    responseId: string;
+  }> {
+    const response = await this.createResponse({
+      model: this.model,
       input: inputItems,
-      tools: dependencies.tools,
+      tools: this.tools,
       truncation: "auto",
       ...(previousResponseId
         ? { previous_response_id: previousResponseId }
         : {}),
-    },
-    dependencies.client
-  );
+    });
 
-  console.log("response", response);
+    console.log("response", response);
 
-  return {
-    output: response.output as Item[],
-    responseId: response.id as string,
-  };
-}
+    return {
+      output: response.output as Item[],
+      responseId: response.id as string,
+    };
+  }
 
-export async function takeAction(
-  dependencies: AgentDependencies,
-  output: Item[]
-): Promise<(Message | ComputerCallOutput | FunctionOutput)[]> {
-  const actions: Promise<Message | ComputerCallOutput | FunctionOutput>[] = [];
-  for (const item of output) {
-    if (item.type === "message") {
-      // Do nothing
+  async takeAction(
+    output: Item[]
+  ): Promise<(Message | ComputerCallOutput | FunctionOutput)[]> {
+    const actions: Promise<Message | ComputerCallOutput | FunctionOutput>[] =
+      [];
+    for (const item of output) {
+      if (item.type === "message") {
+        // Do nothing
+      }
+      if (item.type === "computer_call") {
+        actions.push(this.takeComputerAction(item as ComputerToolCall));
+      }
+      if (item.type === "function_call") {
+        actions.push(this.takeFunctionAction(item as FunctionToolCall));
+      }
     }
-    if (item.type === "computer_call") {
-      actions.push(
-        takeComputerAction(dependencies, item as ComputerToolCall)
-      );
+
+    const results = await Promise.all(actions);
+    return results;
+  }
+
+  async takeMessageAction(messageItem: Message): Promise<Message> {
+    if (this.printSteps && messageItem.content?.[0]) {
+      console.log(messageItem.content[0]);
     }
-    if (item.type === "function_call") {
-      actions.push(
-        takeFunctionAction(dependencies, item as FunctionToolCall)
-      );
+    return messageItem;
+  }
+
+  async takeComputerAction(
+    computerItem: ComputerToolCall
+  ): Promise<ComputerCallOutput> {
+    const action = computerItem.action;
+    const actionType = action.type;
+    const actionArgs = Object.fromEntries(
+      Object.entries(action).filter(([key]) => key !== "type")
+    );
+
+    if (this.printSteps) {
+      console.log(`${actionType}(${JSON.stringify(actionArgs)})`);
     }
-  }
 
-  const results = await Promise.all(actions);
-  return results;
-}
-
-export async function   takeMessageAction(
-  dependencies: AgentDependencies,
-  messageItem: Message
-): Promise<Message> {
-  if (dependencies.printSteps && messageItem.content?.[0]) {
-    console.log(messageItem.content[0]);
-  }
-  return messageItem;
-}
-
-export async function takeComputerAction(
-  dependencies: AgentDependencies,
-  computerItem: ComputerToolCall
-): Promise<ComputerCallOutput> {
-  const action = computerItem.action;
-  const actionType = action.type;
-  const actionArgs = Object.fromEntries(
-    Object.entries(action).filter(([key]) => key !== "type")
-  );
-
-  if (dependencies.printSteps) {
-    console.log(`${actionType}(${JSON.stringify(actionArgs)})`);
-  }
-
-  if (!dependencies.computer) {
-    throw new Error("Computer not initialized");
-  }
-
-  const method = (dependencies.computer as unknown as Record<string, unknown>)[
-    actionType
-  ] as (...args: unknown[]) => unknown;
-  await method.apply(dependencies.computer, Object.values(actionArgs));
-
-  const screenshot = await dependencies.computer.screenshot();
-
-  // Handle safety checks
-  const pendingChecks = computerItem.pending_safety_checks || [];
-  for (const check of pendingChecks) {
-    const message = check.message;
-    if (!dependencies.acknowledgeSafetyCheckCallback(message)) {
-      throw new Error(
-        `Safety check failed: ${message}. Cannot continue with unacknowledged safety checks.`
-      );
+    if (!this.computer) {
+      throw new Error("Computer not initialized");
     }
-  }
 
-  return {
-    type: "computer_call_output",
-    call_id: computerItem.call_id,
-    acknowledged_safety_checks: pendingChecks,
-    output: {
-      type: "input_image",
-      image_url: `data:image/png;base64,${screenshot}`,
-    },
-  };
-}
-
-export async function takeFunctionAction(
-  dependencies: AgentDependencies,
-  functionItem: FunctionToolCall
-): Promise<FunctionOutput> {
-  const { name } = functionItem;
-  const args = JSON.parse(functionItem.arguments);
-  if (dependencies.printSteps) {
-    console.log(`${name}(${JSON.stringify(args)})`);
-  }
-
-  if (
-    dependencies.computer &&
-    typeof (dependencies.computer as unknown as Record<string, unknown>)[name] ===
-      "function"
-  ) {
-    const method = (dependencies.computer as unknown as Record<string, unknown>)[
-      name
+    const method = (this.computer as unknown as Record<string, unknown>)[
+      actionType
     ] as (...args: unknown[]) => unknown;
-    await method.apply(dependencies.computer, Object.values(args));
+    await method.apply(this.computer, Object.values(actionArgs));
+
+    const screenshot = await this.computer.screenshot();
+
+    // Handle safety checks
+    const pendingChecks = computerItem.pending_safety_checks || [];
+    for (const check of pendingChecks) {
+      const message = check.message;
+      if (!this.acknowledgeSafetyCheckCallback(message)) {
+        throw new Error(
+          `Safety check failed: ${message}. Cannot continue with unacknowledged safety checks.`
+        );
+      }
+    }
+
+    return {
+      type: "computer_call_output",
+      call_id: computerItem.call_id,
+      acknowledged_safety_checks: pendingChecks,
+      output: {
+        type: "input_image",
+        image_url: `data:image/png;base64,${screenshot}`,
+      },
+    };
   }
 
-  return {
-    type: "function_call_output",
-    call_id: functionItem.call_id,
-    output: "success", // hard-coded output for demo
-  };
+  async takeFunctionAction(
+    functionItem: FunctionToolCall
+  ): Promise<FunctionOutput> {
+    const name = functionItem.name;
+    const args = JSON.parse(functionItem.arguments);
+    if (this.printSteps) {
+      console.log(`${name}(${JSON.stringify(args)})`);
+    }
+
+    if (
+      this.computer &&
+      typeof (this.computer as unknown as Record<string, unknown>)[name] ===
+        "function"
+    ) {
+      const method = (this.computer as unknown as Record<string, unknown>)[
+        name
+      ] as (...args: unknown[]) => unknown;
+      await method.apply(this.computer, Object.values(args));
+    }
+
+    return {
+      type: "function_call_output",
+      call_id: functionItem.call_id,
+      output: "success", // hard-coded output for demo
+    };
+  }
 }
