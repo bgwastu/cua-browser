@@ -1,5 +1,5 @@
 import { BrowserbaseBrowser } from "./browserbase";
-import OpenAI from "openai";
+import { createOpenAI } from '@ai-sdk/openai';
 import {
   InputItem,
   Item,
@@ -11,14 +11,11 @@ import {
   Tool,
   RequestOptions,
 } from "./types";
-import { AxiosError } from "axios";
-import axios from "axios";
-import axiosRetry from 'axios-retry';
 
 type AcknowledgeSafetyCheckCallback = (message: string) => boolean;
 
 export class Agent {
-  private client: OpenAI;
+  private client: any;
   private model: string;
   private computer: BrowserbaseBrowser;
   private tools: Tool[];
@@ -31,7 +28,7 @@ export class Agent {
     computer: BrowserbaseBrowser,
     acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback = () => true
   ) {
-    this.client = new OpenAI();
+    this.client = createOpenAI({ apiKey: process.env.OPENAI_API_KEY, organization: process.env.OPENAI_ORG });
     this.model = model;
     this.computer = computer;
     this.acknowledgeSafetyCheckCallback = acknowledgeSafetyCheckCallback;
@@ -103,40 +100,56 @@ export class Agent {
       */
   }
 
-  private async createResponse(options: RequestOptions): Promise<Response> {
+  private async createResponse(options: RequestOptions): Promise<any> {
     const url = "https://api.openai.com/v1/responses";
     const headers: Record<string, string> = {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
       'Openai-beta': 'responses=v1',
     };
-  
+
     const openaiOrg = process.env.OPENAI_ORG;
     if (openaiOrg) {
       headers['Openai-Organization'] = openaiOrg;
     }
 
-    // Configure retry behavior
-    axiosRetry(axios, { 
-      retries: 3,
-      retryDelay: axiosRetry.exponentialDelay,
-      retryCondition: (error: AxiosError): boolean => {
-        return axiosRetry.isNetworkOrIdempotentRequestError(error) || 
-               (error.response?.status ? error.response.status >= 500 : false);
-      }
-    });
-  
-    try {
-      const response = await axios.post(url, options, { headers });
-      return response.data;
-    } catch (error) {
-      const axiosError = error as AxiosError;
+    // Manual retry logic
+    let retries = 3;
+    let response;
+    while (retries > 0) {
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(options),
+        });
 
-      console.error(`Error: ${axiosError.response?.status} ${axiosError.response?.data || axiosError.message}`);
-      console.error(`${JSON.stringify(axiosError.response?.data)}`);
-      throw error;
+        if (response.ok) {
+          return await response.json();
+        }
+
+        if (response.status < 500) {
+          const errorData = await response.json();
+          console.error(`Error: ${response.status} ${JSON.stringify(errorData)}`);
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+      } catch (error) {
+        console.error(`Fetch error: ${error}`);
+        if (retries === 1) {
+          throw error; // Re-throw the error on the last retry
+        }
+      }
+
+      // Exponential backoff (simplified)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (4 - retries)));
+      retries--;
     }
-  } 
+    if (response) {
+      const errorData = await response.json();
+      console.error(`Error: ${response.status} ${JSON.stringify(errorData)}`);
+    }
+    throw new Error("Max retries exceeded");
+  }
 
   async getAction(
     inputItems: InputItem[],
