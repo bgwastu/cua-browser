@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import AnimatedButton from "./components/AnimatedButton";
 import Image from "next/image";
-import posthog from "posthog-js";
 import ChatFeed from "./components/ChatFeed";
 import { Code, Gamepad2, Layers, Table, TrendingUp } from "lucide-react";
 
@@ -88,14 +87,6 @@ export default function Home() {
     (finalMessage: string) => {
       setInitialMessage(finalMessage);
       setIsChatVisible(true);
-
-      try {
-        posthog.capture("submit_message", {
-          message: finalMessage,
-        });
-      } catch (e) {
-        console.error(e);
-      }
     },
     [setInitialMessage, setIsChatVisible]
   );

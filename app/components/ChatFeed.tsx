@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
 import { useWindowSize } from "usehooks-ts";
 import Image from "next/image";
-import posthog from "posthog-js";
 import {
   FunctionOutput,
   Item,
@@ -1220,11 +1219,6 @@ export default function LegacyChatFeed({
           });
 
           const responseData = await startResponse.json();
-
-          posthog.capture("cua_start", {
-            goal: initialMessage,
-            sessionId: sessionData.sessionId,
-          });
 
           // Ensure startData is always an array
           const startData = Array.isArray(responseData) ? responseData : [];
