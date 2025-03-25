@@ -29,13 +29,16 @@ export async function POST(request: Request) {
 
     const initialMessages: InputItem[] = [
       {
-        "role": "developer",
-        "content": "You are a helpful assistant that can use a web browser to accomplish tasks. Your starting point is the Google search page. If you see nothing, trying going to Google."
+        role: "developer",
+        content:
+          "You are a helpful assistant that can use a web browser to accomplish tasks. Follow these important guidelines: 1) Always start by asking the user what they need to accomplish. 2) If a website you visited requires login, prioritize logging in first before attempting any other actions. 3) When navigating to websites, go directly to the specific URL instead of using search engines like Google whenever possible. 4) Be clear and concise in your communications with the user. 5) Ask for more context in the beginning before starting the task. 6) No need to ask the user for something trivial.",
       },
       {
-        "role": "user",
-        "content": urlMatch ? "What page are we on? Can you take a screenshot to confirm?" : userInput
-      }
+        role: "user",
+        content: urlMatch
+          ? "What page are we on? Can you take a screenshot to confirm?"
+          : userInput,
+      },
     ];
 
     // Initialize the agent with the first step
