@@ -1,6 +1,6 @@
 import { Browser, Page } from 'playwright';
 
-// Optional: key mapping if your model uses "CUA" style keys
+// Key mapping for CUA style keys to Playwright keys
 const CUA_KEY_TO_PLAYWRIGHT_KEY: Record<string, string> = {
   "/": "Divide",
   "\\": "Backslash",
@@ -35,6 +35,7 @@ const CUA_KEY_TO_PLAYWRIGHT_KEY: Record<string, string> = {
   "win": "Meta",
 };
 
+// Hotkeys mapping
 const HOTKEYS: Record<string, string> = {
   "alt": "Alt",
   "ctrl": "Control",
@@ -82,16 +83,14 @@ export abstract class BasePlaywrightComputer {
     }
   }
   
-  // --- Common "Computer" actions ---
+  // Screenshot action
   async screenshot(): Promise<string> {
-    /**
-     * Capture only the viewport (not full_page).
-     */
     if (!this._page) throw new Error("Page not initialized");
     const buffer = await this._page.screenshot({ fullPage: false });
     return buffer.toString('base64');
   }
   
+  // Click action
   async click(button: string = "left", x: number | string, y: number | string): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     const parsedX = typeof x === 'string' ? parseInt(x, 10) : x;
@@ -106,45 +105,47 @@ export abstract class BasePlaywrightComputer {
     }
   }
   
+  // Double click action
   async double_click(x: number, y: number): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     await this._page.mouse.dblclick(x, y);
   }
   
+  // Scroll action
   async scroll(x: number, y: number, scrollX: number, scrollY: number): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     await this._page.mouse.wheel(scrollX, scrollY);
     await this._page.mouse.move(x, y);
   }
   
+  // Type action
   async type(text: string): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     await this._page.keyboard.type(text);
   }
   
+  // Wait action
   async wait(ms: number = 250): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, ms));
   }
   
+  // Move action
   async move(x: number, y: number): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     await this._page.mouse.move(x, y);
   }
   
+  // Keypress action
   async keypress(keys: string[]): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
 
-    console.log("HOT KEY", HOTKEYS[keys[0].toLowerCase()]);
     // Support for hotkeys
     if (HOTKEYS[keys[0].toLowerCase()]) {
       await this._page.keyboard.down(HOTKEYS[keys[0].toLowerCase()]);
-      console.log("DOWN", HOTKEYS[keys[0].toLowerCase()]);
       for (let i = 1; i < keys.length; i++) {
         await this._page.keyboard.press(keys[i]);
-        console.log("PRESS", keys[i]);
       }
       await this._page.keyboard.up(HOTKEYS[keys[0].toLowerCase()]);
-      console.log("UP", HOTKEYS[keys[0].toLowerCase()]);
     } else {
       for (const key of keys) {
         const mappedKey = CUA_KEY_TO_PLAYWRIGHT_KEY[key.toLowerCase()] || key;
@@ -153,6 +154,7 @@ export abstract class BasePlaywrightComputer {
     }
   }
   
+  // Drag action
   async drag(path: {x: number, y: number}[]): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     if (!path.length) return;
@@ -167,17 +169,18 @@ export abstract class BasePlaywrightComputer {
     await this._page.mouse.up();
   }
   
-  // --- Extra browser-oriented actions ---
+  // Go to URL action
   async goto(url: string): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     await this._page.goto(url, { waitUntil: "domcontentloaded" });
   }
   
+  // Go back action
   async back(): Promise<void> {
     if (!this._page) throw new Error("Page not initialized");
     await this._page.goBack();
   }
   
-  // --- Subclass hook ---
+  // Subclass hook to be implemented by concrete implementations
   protected abstract _getBrowserAndPage(): Promise<[Browser, Page]>;
 } 

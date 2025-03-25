@@ -21,7 +21,7 @@ interface SessionCreateParams {
     };
     blockAds: boolean;
   };
-  region: "us-west-2" | "us-east-1" | "eu-central-1" | "ap-southeast-1";
+  region: "ap-southeast-1";
   proxies: boolean;
   keepAlive: boolean;
 }
@@ -36,14 +36,12 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
   private bb: Browserbase;
   private projectId: string;
   private session: BrowserbaseSession | null = null;
-  private region: string;
   private proxy: boolean;
   private sessionId: string | null;
 
   constructor(
     width: number = 1024,
     height: number = 768,
-    region: string = "ap-southeast-1",
     proxy: boolean = false,
     sessionId: string | null = null
   ) {
@@ -52,18 +50,14 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
      *
      * @param width - The width of the browser viewport. Default is 1024.
      * @param height - The height of the browser viewport. Default is 768.
-     * @param region - The region for the Browserbase session. Default is "ap-southeast-1". Pick a region close to you for better performance. https://docs.browserbase.com/guides/multi-region
      * @param proxy - Whether to use a proxy for the session. Default is False. Turn on proxies if you're browsing is frequently interrupted. https://docs.browserbase.com/features/proxies
      * @param sessionId - Optional. If provided, use an existing session instead of creating a new one.
      */
     super();
-    // We're using a dynamic import here as a workaround since we don't have the actual types
-    // In a real project, you would install the proper types and import correctly
     this.bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
     this.projectId = process.env.BROWSERBASE_PROJECT_ID!;
     this.session = null;
     this.dimensions = [width, height];
-    this.region = region;
     this.proxy = proxy;
     this.sessionId = sessionId;
   }
@@ -105,11 +99,7 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
             height,
           },
         },
-        region: this.region as
-          | "us-west-2"
-          | "us-east-1"
-          | "eu-central-1"
-          | "ap-southeast-1",
+        region: "ap-southeast-1",
         proxies: this.proxy,
         keepAlive: true,
       };
@@ -174,22 +164,6 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
     return [browser, page];
   }
 
-  async disconnect(): Promise<void> {
-    /**
-     * Clean up resources when exiting the context manager.
-     */
-    /*if (this._page) {
-      await this._page.close();
-    }
-    if (this._browser) {
-      await this._browser.close();
-    }
-    
-    if (this.session) {
-      console.log(`Session completed. View replay at https://browserbase.com/sessions/${this.session.id}`);
-    }*/
-  }
-
   async screenshot(): Promise<string> {
     /**
      * Capture a screenshot of the current viewport using CDP.
@@ -233,34 +207,19 @@ export class BrowserbaseBrowser extends BasePlaywrightComputer {
     await this._page.reload();
   }
 
-  async listTabs(): Promise<string[]> {
-    /**
-     * Get the list of tabs, including the current tab.
-     */
+  async goto(url: string): Promise<void> {
     if (!this._page) {
       throw new Error("Page not initialized");
     }
 
-    const tabs = await this._page.context().pages();
-    const tabUrls = tabs.map((tab) => tab.url());
-    const currentTab = this._page.url();
-    return [...tabUrls, currentTab];
+    await this._page.goto(url);
   }
 
-  async changeTab(tabUrl: string): Promise<void> {
-    /**
-     * Change to a specific tab.
-     */
+  async back(): Promise<void> {
     if (!this._page) {
       throw new Error("Page not initialized");
     }
 
-    const tabs = await this._page.context().pages();
-    const tab = tabs.find((t) => t.url() === tabUrl);
-    if (!tab) {
-      throw new Error(`Tab with URL ${tabUrl} not found`);
-    }
-    await tab.bringToFront();
-    this._page = tab;
+    await this._page.goBack();
   }
 }

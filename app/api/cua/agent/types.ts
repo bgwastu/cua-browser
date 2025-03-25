@@ -29,7 +29,7 @@ export type InputItem = EasyMessage | FunctionOutput | ComputerCallOutput;
 export type Tool = FunctionTool | ComputerTool;
 
 export type ComputerTool = {
-  type: "computer-preview";
+  type: "computer_use_preview";
   display_width: number;
   display_height: number;
   environment: "mac" | "windows" | "linux" | "browser";

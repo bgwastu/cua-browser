@@ -1,24 +1,22 @@
 import { BrowserbaseBrowser } from "./browserbase";
-import OpenAI from "openai";
 import {
+  Tool as AgentTool,
+  ComputerCallOutput,
+  ComputerToolCall,
+  FunctionOutput,
+  FunctionToolCall,
   InputItem,
   Item,
   Message,
-  FunctionToolCall,
-  ComputerToolCall,
-  ComputerCallOutput,
-  FunctionOutput,
-  Tool,
   RequestOptions,
 } from "./types";
 
 type AcknowledgeSafetyCheckCallback = (message: string) => boolean;
 
 export class Agent {
-  private client: OpenAI;
   private model: string;
   private computer: BrowserbaseBrowser;
-  private tools: Tool[];
+  private tools: AgentTool[];
   private printSteps: boolean = true;
   private acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback;
   public lastResponseId: string | undefined = undefined;
@@ -28,14 +26,14 @@ export class Agent {
     computer: BrowserbaseBrowser,
     acknowledgeSafetyCheckCallback: AcknowledgeSafetyCheckCallback = () => true
   ) {
-    this.client = new OpenAI();
     this.model = model;
     this.computer = computer;
     this.acknowledgeSafetyCheckCallback = acknowledgeSafetyCheckCallback;
 
+    // Define the available tools for the agent
     this.tools = [
       {
-        type: "computer-preview",
+        type: "computer_use_preview",
         display_width: computer.dimensions[0],
         display_height: computer.dimensions[1],
         environment: computer.environment,
@@ -65,53 +63,15 @@ export class Agent {
         strict: false,
       },
     ];
-    /* Some additional tools, disabled as they seem to slow down model performance
-      {
-        type: "function",
-        name: "refresh",
-        description: "Refresh the current page.",
-        parameters: {},
-        strict: false,
-      },
-      {
-        type: "function",
-        name: "listTabs",
-        description: "Get the list of tabs, including the current tab.",
-        parameters: {},
-        strict: false,
-      },
-      {
-        type: "function",
-        name: "changeTab",
-        description: "Change to a specific tab.",
-        parameters: {
-          type: "object",
-          properties: {
-            tab: {
-              type: "string",
-              description: "The URL of the tab to change to.",
-            },
-          },
-          additionalProperties: false,
-          required: ["tab"],
-        },
-        strict: false,
-      },
-      */
   }
 
-  private async createResponse(options: RequestOptions): Promise<Response> {
+  private async createResponse(options: RequestOptions): Promise<any> {
     const url = "https://api.openai.com/v1/responses";
     const headers: Record<string, string> = {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
       'Openai-beta': 'responses=v1',
     };
-  
-    const openaiOrg = process.env.OPENAI_ORG;
-    if (openaiOrg) {
-      headers['Openai-Organization'] = openaiOrg;
-    }
 
     // Function to handle fetch with retry logic
     const fetchWithRetry = async (
@@ -161,6 +121,9 @@ export class Agent {
     }
   } 
 
+  /**
+   * Get the next action from the agent based on the input messages
+   */
   async getAction(
     inputItems: InputItem[],
     previousResponseId: string | undefined
@@ -178,23 +141,21 @@ export class Agent {
         : {}),
     });
 
-    console.log("response", response);
-
     return {
       output: response.output as Item[],
       responseId: response.id as string,
     };
   }
 
+  /**
+   * Execute the actions returned by the agent
+   */
   async takeAction(
     output: Item[]
   ): Promise<(Message | ComputerCallOutput | FunctionOutput)[]> {
-    const actions: Promise<Message | ComputerCallOutput | FunctionOutput>[] =
-      [];
+    const actions: Promise<Message | ComputerCallOutput | FunctionOutput>[] = [];
+    
     for (const item of output) {
-      if (item.type === "message") {
-        // Do nothing
-      }
       if (item.type === "computer_call") {
         actions.push(this.takeComputerAction(item as ComputerToolCall));
       }
@@ -207,6 +168,9 @@ export class Agent {
     return results;
   }
 
+  /**
+   * Process a message action
+   */
   async takeMessageAction(messageItem: Message): Promise<Message> {
     if (this.printSteps && messageItem.content?.[0]) {
       console.log(messageItem.content[0]);
@@ -214,6 +178,9 @@ export class Agent {
     return messageItem;
   }
 
+  /**
+   * Execute a computer action (like click, type, etc.)
+   */
   async takeComputerAction(
     computerItem: ComputerToolCall
   ): Promise<ComputerCallOutput> {
@@ -231,11 +198,18 @@ export class Agent {
       throw new Error("Computer not initialized");
     }
 
+    // Execute the computer action
     const method = (this.computer as unknown as Record<string, unknown>)[
       actionType
     ] as (...args: unknown[]) => unknown;
+    
+    if (typeof method !== 'function') {
+      throw new Error(`Method ${actionType} not found on computer`);
+    }
+    
     await method.apply(this.computer, Object.values(actionArgs));
 
+    // Take a screenshot after the action
     const screenshot = await this.computer.screenshot();
 
     // Handle safety checks
@@ -260,11 +234,15 @@ export class Agent {
     };
   }
 
+  /**
+   * Execute a function action (like back, goto, etc.)
+   */
   async takeFunctionAction(
     functionItem: FunctionToolCall
   ): Promise<FunctionOutput> {
     const name = functionItem.name;
     const args = JSON.parse(functionItem.arguments);
+    
     if (this.printSteps) {
       console.log(`${name}(${JSON.stringify(args)})`);
     }
@@ -283,7 +261,7 @@ export class Agent {
     return {
       type: "function_call_output",
       call_id: functionItem.call_id,
-      output: "success", // hard-coded output for demo
+      output: "success",
     };
   }
 }

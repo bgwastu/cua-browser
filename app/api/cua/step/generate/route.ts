@@ -10,16 +10,16 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { sessionId, responseId, input } = body;
-    console.log("input", input);
 
-    computer = new BrowserbaseBrowser(1024, 768, "ap-southeast-1", false, sessionId);
-    agent = new Agent("computer-use-preview", computer);
     if (!sessionId) {
       return NextResponse.json(
         { error: "Missing sessionId in request body" },
         { status: 400 }
       );
     }
+
+    computer = new BrowserbaseBrowser(1024, 768, false, sessionId);
+    agent = new Agent("computer-use-preview", computer);
 
     let result = await agent.getAction(input, responseId);
 
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json([result]);
   } catch (error) {
-    console.error("Error in cua endpoint:", error);
+    console.error("Error in generate endpoint:", error);
     return NextResponse.json(
       { success: false, error: "Failed to process request" },
       { status: 500 }
